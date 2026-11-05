@@ -1,0 +1,70 @@
+name: IncidentIQ CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  backend-test:
+    name: Backend Lint & Pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest
+          pip install -r backend/requirements.txt
+
+      - name: Ruff Lint Check
+        run: python -m ruff check backend
+
+      - name: Run Backend Pytest Suite
+        env:
+          PYTHONPATH: backend
+          INCIDENTIQ_ENV: test
+        run: python -m pytest backend/tests -v --durations=10
+
+      - name: Run Benchmark Evaluator
+        env:
+          PYTHONPATH: backend
+        run: python -m incidentiq.evaluation
+
+  frontend-test:
+    name: Frontend Lint, Typecheck & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Frontend Linter Check
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: TypeScript Compile Check
+        working-directory: ./frontend
+        run: npx tsc -b
+
+      - name: Vite Production Build
+        working-directory: ./frontend
+        run: npm run build
+

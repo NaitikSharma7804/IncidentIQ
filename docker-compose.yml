@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: incidentiq-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-incidentiq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-incidentiq_dev_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-incidentiq}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U incidentiq -d incidentiq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: incidentiq-backend
+    environment:
+      INCIDENTIQ_ENV: ${INCIDENTIQ_ENV:-production}
+      INCIDENTIQ_JWT_SECRET: ${INCIDENTIQ_JWT_SECRET:-production_strong_secret_key_minimum_32_chars_long}
+      INCIDENTIQ_DATABASE_URL: postgresql://${POSTGRES_USER:-incidentiq}:${POSTGRES_PASSWORD:-incidentiq_dev_pass}@db:5432/${POSTGRES_DB:-incidentiq}
+      INCIDENTIQ_CORS_ORIGINS: http://localhost,http://localhost:5173,http://localhost:80
+      INCIDENTIQ_DEMO_PASSWORD: ${INCIDENTIQ_DEMO_PASSWORD:-demo-only}
+      INCIDENTIQ_ENABLE_LLM: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: incidentiq-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  pgdata:
+
